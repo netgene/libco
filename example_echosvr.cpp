@@ -36,12 +36,16 @@
 using namespace std;
 struct task_t
 {
+	//协程 保存协程运行时所有信息
 	stCoRoutine_t *co;
 	int fd;
 };
 
+//协程任务栈
 static stack<task_t*> g_readwrite;
 static int g_listen_fd = -1;
+
+//非阻塞
 static int SetNonBlock(int iSock)
 {
     int iFlags;
@@ -53,6 +57,7 @@ static int SetNonBlock(int iSock)
     return ret;
 }
 
+//协程任务入口函数
 static void *readwrite_routine( void *arg )
 {
 
@@ -217,7 +222,7 @@ int main(int argc,char *argv[])
 			task_t * task = (task_t*)calloc( 1,sizeof(task_t) );
 			task->fd = -1;
 
-			// co_create 入口函数 readwrite_routine
+			// co_create 协程任务运行入口函数 readwrite_routine 参数task
 			co_create( &(task->co),NULL,readwrite_routine,task );
 			// co_resume 
 			co_resume( task->co );

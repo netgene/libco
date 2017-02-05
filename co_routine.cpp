@@ -510,6 +510,7 @@ struct stCoRoutine_t *co_create_env( stCoRoutineEnv_t * env, const stCoRoutineAt
 
 int co_create( stCoRoutine_t **ppco,const stCoRoutineAttr_t *attr,pfn_co_routine_t pfn,void *arg )
 {
+	//协程环境初始化
 	if( !co_get_curr_thread_env() ) 
 	{
 		co_init_curr_thread_env();
@@ -692,6 +693,7 @@ static short EpollEvent2Poll( uint32_t events )
 static stCoRoutineEnv_t* g_arrCoEnvPerThread[ 204800 ] = { 0 };
 void co_init_curr_thread_env()
 {
+	//stCoRoutineEnv_t 协程环境信息
 	pid_t pid = GetPid();	
 	g_arrCoEnvPerThread[ pid ] = (stCoRoutineEnv_t*)calloc( 1,sizeof(stCoRoutineEnv_t) );
 	stCoRoutineEnv_t *env = g_arrCoEnvPerThread[ pid ];
@@ -703,10 +705,12 @@ void co_init_curr_thread_env()
 	env->pending_co = NULL;
 	env->ocupy_co = NULL;
 
+	//协程底层支撑信息
 	coctx_init( &self->ctx );
 
 	env->pCallStack[ env->iCallStackSize++ ] = self;
 
+	//申请epoll 与当前环境env绑定
 	stCoEpoll_t *ev = AllocEpoll();
 	SetEpoll( env,ev );
 }
