@@ -217,7 +217,9 @@ int main(int argc,char *argv[])
 			task_t * task = (task_t*)calloc( 1,sizeof(task_t) );
 			task->fd = -1;
 
+			// co_create 入口函数 readwrite_routine
 			co_create( &(task->co),NULL,readwrite_routine,task );
+			// co_resume 
 			co_resume( task->co );
 
 		}
