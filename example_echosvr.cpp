@@ -67,9 +67,13 @@ static void *readwrite_routine( void *arg )
 	char buf[ 1024 * 16 ];
 	for(;;)
 	{
+		//表示当前没有就绪的任务要处理
 		if( -1 == co->fd )
 		{
+			//当前协程入队列
 			g_readwrite.push( co );
+			// 挂起当前协程，让出执行权给其他协程。
+			// 原则很简单，就是让上次挂起的协程执行，可以认为是返回到上次执行的运行点。
 			co_yield_ct();
 			continue;
 		}
@@ -108,6 +112,7 @@ static void *accept_routine( void * )
 	for(;;)
 	{
 		//printf("pid %ld g_readwrite.size %ld\n",getpid(),g_readwrite.size());
+		// 如果工作协程队列为空，就等待1秒或者等再来事件，重试
 		if( g_readwrite.empty() )
 		{
 			printf("empty\n"); //sleep
@@ -123,11 +128,13 @@ static void *accept_routine( void * )
 		socklen_t len = sizeof(addr);
 
 		int fd = co_accept(g_listen_fd, (struct sockaddr *)&addr, &len);
+		// 未就绪，等待下次事件继续处理
 		if( fd < 0 )
 		{
 			struct pollfd pf = { 0 };
 			pf.fd = g_listen_fd;
 			pf.events = (POLLIN|POLLERR|POLLHUP);
+			//　当前运行在accept协程，co_poll会在等待事件的时候交出cpu，回到主进程
 			co_poll( co_get_epoll_ct(),&pf,1,1000 );
 			continue;
 		}
@@ -229,7 +236,9 @@ int main(int argc,char *argv[])
 
 		}
 		stCoRoutine_t *accept_co = NULL;
+		// 启动一个协程专门做accept
 		co_create( &accept_co,NULL,accept_routine,0 );
+		// accept_co会一直接受新连接，直到它交出执行权，才会重新回到主进程
 		co_resume( accept_co );
 
 		co_eventloop( co_get_epoll_ct(),0,0 );
