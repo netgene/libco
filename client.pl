@@ -10,8 +10,16 @@ main:
     my $sock = new IO::Socket::INET( PeerAddr => $host, PeerPort => $port, Proto => 'tcp'); 
     $sock or die "no socket :$!"; 
     my $msg;
-    $sock->send("hello srv");
-    $sock->recv($msg, 1024);
-    print $msg . "\n";
+
+    my $i = 1;
+    while($i < 100)
+    {
+        $sock->send("hello srv");
+        print "send:hello srv\n";
+        $sock->recv($msg, 1024);
+        print "recv:" . $msg . "\n";
+        sleep 5;
+	$i++;
+    }
     close $sock;
 }

@@ -60,7 +60,7 @@ static int SetNonBlock(int iSock)
 //协程任务入口函数
 static void *readwrite_routine( void *arg )
 {
-
+	printf("readwrite_routine start\n");
 	co_enable_hook_sys();
 
 	task_t *co = (task_t*)arg;
@@ -72,9 +72,12 @@ static void *readwrite_routine( void *arg )
 		{
 			//当前协程入队列
 			g_readwrite.push( co );
+			printf("g_readwrite.push(co)\n");
 			// 挂起当前协程，让出执行权给其他协程。
 			// 原则很简单，就是让上次挂起的协程执行，可以认为是返回到上次执行的运行点。
+			printf("co_yield_ct() readwrite_routine\n");
 			co_yield_ct();
+			printf("continue readwrite_routine\n");
 			continue;
 		}
 
@@ -91,6 +94,7 @@ static void *readwrite_routine( void *arg )
 			int ret = read( fd,buf,sizeof(buf) );
 			if( ret > 0 )
 			{
+				printf("recv:%s\n", buf);
 				ret = write( fd,buf,ret );
 			}
 			if( ret <= 0 )
@@ -107,7 +111,7 @@ int co_accept(int fd, struct sockaddr *addr, socklen_t *len );
 static void *accept_routine( void * )
 {
 	co_enable_hook_sys();
-	printf("accept_routine\n");
+	printf("accept_routine start\n");
 	fflush(stdout);
 	for(;;)
 	{
@@ -115,7 +119,7 @@ static void *accept_routine( void * )
 		// 如果工作协程队列为空，就等待1秒或者等再来事件，重试
 		if( g_readwrite.empty() )
 		{
-			printf("empty\n"); //sleep
+			printf("accept_routine g_readwrite.empty\n"); //sleep
 			struct pollfd pf = { 0 };
 			pf.fd = -1;
 			poll( &pf,1,1000);
@@ -127,6 +131,7 @@ static void *accept_routine( void * )
 		memset( &addr,0,sizeof(addr) );
 		socklen_t len = sizeof(addr);
 
+		//printf("co_accept accept_routine\n");
 		int fd = co_accept(g_listen_fd, (struct sockaddr *)&addr, &len);
 		// 未就绪，等待下次事件继续处理
 		if( fd < 0 )
@@ -138,15 +143,19 @@ static void *accept_routine( void * )
 			co_poll( co_get_epoll_ct(),&pf,1,1000 );
 			continue;
 		}
+		// Fun！这里工作协程用尽，直接关闭当前连接...
 		if( g_readwrite.empty() )
 		{
 			close( fd );
 			continue;
 		}
+		// 弹出一个协程，去处理新连接
 		SetNonBlock( fd );
 		task_t *co = g_readwrite.top();
 		co->fd = fd;
 		g_readwrite.pop();
+		// 此时执行权会转移到某个线程，直到它交出cpu，当前协程才会再次执行
+		printf("co_resume g_readwrite.top\n");
 		co_resume( co->co );
 	}
 	return 0;
@@ -230,17 +239,22 @@ int main(int argc,char *argv[])
 			task->fd = -1;
 
 			// co_create 协程任务运行入口函数 readwrite_routine 参数task
+			printf("co_create readwrite_routine\n");
 			co_create( &(task->co),NULL,readwrite_routine,task );
-			// co_resume 
+			// co_resume 恢复协程执行 底层都会调用co_swap进行在独立栈/共享栈环境下的切换
+			printf("co_resume readwrite_routine\n");
 			co_resume( task->co );
 
 		}
 		stCoRoutine_t *accept_co = NULL;
 		// 启动一个协程专门做accept
+		printf("co_create accept_routine\n");
 		co_create( &accept_co,NULL,accept_routine,0 );
 		// accept_co会一直接受新连接，直到它交出执行权，才会重新回到主进程
+		printf("co_resume accept_routine\n");
 		co_resume( accept_co );
 
+		printf("co_eventloop\n");
 		co_eventloop( co_get_epoll_ct(),0,0 );
 
 		exit(0);
